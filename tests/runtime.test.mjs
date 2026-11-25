@@ -80,6 +80,52 @@ test('403, 429 and transport errors reuse the existing session without login ret
   ]);
 });
 
+test('an anonymous CSRF cookie does not suppress the first login', () => {
+  const host = loadRuntime({
+    fetch(url, { headers }) {
+      switch (url) {
+        case `${origin}/preflight`: return { status: 200, set_cookies: ['csrf=fake; Path=/'] };
+        case `${origin}/login`:
+          return headers.Cookie === 'csrf=fake'
+            ? { status: 200, set_cookies: ['sid=authenticated; Path=/'] }
+            : { status: 403 };
+        case `${origin}/results`: return { status: headers.Cookie?.includes('sid=authenticated') ? 200 : 403 };
+        default: throw new Error('Unexpected route');
+      }
+    },
+  });
+  const client = makeClient(host);
+  client.raw('/preflight');
+  assert.equal(client.request('/results').status, 200);
+  assert.deepEqual(host.calls.map(({ url }) => url), [`${origin}/preflight`, `${origin}/login`, `${origin}/results`]);
+});
+
+test('a fresh invocation renews an expired login cookie while an auxiliary cookie survives', () => {
+  let time = 1_700_000_000_000;
+  const options = {
+    now: () => time,
+    fetch(url, { headers }) {
+      switch (url) {
+        case `${origin}/login`: return { status: 200, set_cookies: ['csrf=fake; Path=/', 'sid=authenticated; Path=/; Max-Age=2'] };
+        case `${origin}/results`: return { status: headers.Cookie?.includes('sid=authenticated') ? 200 : 403 };
+        default: throw new Error('Unexpected route');
+      }
+    },
+  };
+  const initial = loadRuntime(options);
+  assert.equal(makeClient(initial).request('/results').status, 200);
+
+  const beforeExpiry = loadRuntime({ ...options, store: initial.store });
+  assert.equal(makeClient(beforeExpiry).request('/results').status, 200);
+  assert.deepEqual(beforeExpiry.calls.map(({ url }) => url), [`${origin}/results`]);
+
+  time += 2_000;
+  const afterExpiry = loadRuntime({ ...options, store: initial.store });
+  assert.equal(makeClient(afterExpiry).request('/results').status, 200);
+  assert.deepEqual(afterExpiry.calls.map(({ url }) => url), [`${origin}/login`, `${origin}/results`]);
+  assert.equal(afterExpiry.calls[0].options.headers.Cookie, 'csrf=fake');
+});
+
 test('cookies scope to normalized paths and matching domains and expire by Max-Age or Expires', () => {
   let time = 1_700_000_000_000;
   const host = loadRuntime({
@@ -254,6 +300,31 @@ test('extracting the same URL from a link label retains its access code once', (
   ]);
 });
 
+test('plain shares keep access codes split across inline tags and stop at block boundaries', () => {
+  const { MP } = loadRuntime();
+  assert.deepEqual(plain(MP.extract(`<p><span>https://115.com/s/sdemo12</span>，<i>提取码：</i><b>abcd</b></p>
+    <p>https://115.com/s/sdemo34</p><p>提取码：wxyz</p>`)), [
+    { type: '115', url: 'https://115.com/s/sdemo12', code: 'abcd', label: '' },
+    { type: '115', url: 'https://115.com/s/sdemo34', code: '', label: '' },
+  ]);
+});
+
+test('the code in a link wins over its repeated label and separately explicit codes remain', () => {
+  const { MP } = loadRuntime();
+  assert.deepEqual(plain(MP.extract(`<p><a href="https://115.com/s/sdemo12?password=abcd">https://115.com/s/sdemo12</a> 提取码：wxyz</p>
+    <p><a href="https://115.com/s/sdemo12" data-password="efgh">另一版本</a></p>`)), [
+    { type: '115', url: 'https://115.com/s/sdemo12', code: 'abcd', label: 'https://115.com/s/sdemo12' },
+    { type: '115', url: 'https://115.com/s/sdemo12', code: 'efgh', label: '另一版本' },
+  ]);
+});
+
+test('resource validators reject invalid escapes in bare query components', () => {
+  const { MP } = loadRuntime();
+  assert.equal(MP.magnet(`${magnet}&bare%QX`), '');
+  assert.equal(MP.share115('https://115.com/s/sdemo12?password=abcd&bare%QX'), null);
+  assert.equal(MP.magnet(`${magnet}&bare%20optional`), `${magnet}&bare%20optional`);
+});
+
 test('limits respect both requested and configured caps and a nullable time budget', () => {
   const { MP } = loadRuntime({ settings: { result_limit: '45' }, remainingMs: 1200 });
   assert.ok(MP, 'The shared runtime exposes MP');
@@ -279,6 +350,16 @@ test('selection tokens round-trip JSON metadata and reject malformed or secret f
   assert.equal(MP.untoken('not-a-valid-token'), null);
   assert.equal(MP.untoken(`${value}!`), null);
   assert.equal(MP.token({ id: '22', nested: { share_code: 'abcd' } }), '');
+});
+
+test('selection token encoding and decoding reject nested access credentials', () => {
+  const { MP } = loadRuntime();
+  for (const key of ['token', 'access_ticket', 'access_code', 'session', 'AccessTicket', 'access-code']) {
+    const metadata = { id: 'source-22', fields: [{ [key]: 'fake-private-value' }] };
+    const supplied = `v1_${Buffer.from(JSON.stringify(metadata)).toString('base64url')}`;
+    assert.equal(MP.token(metadata), '', `encoder rejects ${key}`);
+    assert.equal(MP.untoken(supplied), null, `decoder rejects ${key}`);
+  }
 });
 
 test('build compiles standalone entries and copies only their manifest and readme', async () => {
