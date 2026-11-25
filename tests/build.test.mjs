@@ -11,7 +11,7 @@ import { build } from '../scripts/build.mjs';
 const ids = new Map([
   ['balge.miniyingshi', '迷你影视'],
   ['balge.woniu', '蜗牛 4K'],
-  ['balge.jying', '鲸影'],
+  ['balge.jying', '聚影'],
 ]);
 const validatePath = fileURLToPath(new URL('../scripts/validate.mjs', import.meta.url));
 

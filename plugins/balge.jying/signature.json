@@ -21,10 +21,10 @@
   "plugin_id": "balge.jying",
   "version": "1.0.0",
   "files": {
-   "README.md": "1148be5402e30aca469d0e02db5ac931463f7f396dd6f60daa68f93331d6f618",
-   "encrypted.json": "a3cff2031a7c03371fbbe2e224c794e4ff52f33fb38afa7e35c97a60e2eb4679",
-   "manifest.json": "3cc3ca624532907df70e0210f12405afa7b59b4276e594d855e66810b379f13b"
+   "README.md": "35c2ce8ac7770c5aa135a315ad461646137c3017d1d1e852d450849d63a923d5",
+   "encrypted.json": "d78a25be53ad0161b3303229f59504575e06774db24888d0f7cf39aa2452fdb8",
+   "manifest.json": "9f539d3c66ada8f1c62334731dda33d635fb5454c3a6d4f7cf1df613f656cd82"
   }
  },
- "signature": "03jUQvUUvqjrwctlLth357QSOwdIPNPH6WsKgVuHGBGvpcccu/1v8XcCPiM99wr6yjiXywczsNOI5k2x76fsAw=="
+ "signature": "l4L9jw+6PFnfW6SEb4LmXztNGbs7W3HJvyf6Dv/8CNZH9fszIkFucwdUscSVb0drBJydn6JYYn8jyBxymUXjBQ=="
 }

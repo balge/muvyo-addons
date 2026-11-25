@@ -1,10 +1,10 @@
 {
   "api": 1,
   "id": "balge.jying",
-  "name": "鲸影",
+  "name": "聚影",
   "version": "1.0.0",
   "author": "balge",
-  "description": "搜索鲸影的 115 分享与磁力链接。",
+  "description": "搜索聚影的 115 分享与磁力链接。",
   "min_mv_version": "3.14.0",
   "entry": "main.js",
   "permissions": {

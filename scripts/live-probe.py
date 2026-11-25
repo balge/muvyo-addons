@@ -304,7 +304,8 @@ def plugin_settings(file, plugin_id, limit):
         username, password = account["username"], account["password"]
     if not isinstance(username, str) or not username or not isinstance(password, str) or not password:
         raise ValueError("Account settings are incomplete")
-    return {"username": username, "password": password, "result_limit": str(limit)}
+    return {"username": username, "password": password,
+            "result_limit": limit, "resource_types": "both"}
 
 
 def outcome(result, kind):

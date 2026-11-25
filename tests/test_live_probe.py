@@ -120,6 +120,10 @@ class LiveProbeTests(unittest.TestCase):
         entry = """
           let cleanContext = true;
           function search() {
+            if (typeof mv.config.result_limit !== 'number' || mv.config.result_limit !== 7 ||
+                typeof mv.config.resource_types !== 'string' || mv.config.resource_types !== 'both') {
+              throw new Error('incorrect host configuration');
+            }
             mv.storage.set('session', 'fixture-private-session');
             cleanContext = false;
             return {items: [
@@ -145,7 +149,7 @@ class LiveProbeTests(unittest.TestCase):
             }}), encoding="utf-8")
             run = subprocess.run([sys.executable, str(Path(probe.__file__)),
                                   "--dist", str(fixture / "dist"), "--accounts", str(accounts),
-                                  "--plugin", PLUGIN, "--keyword", "fixture-private-keyword"],
+                                  "--plugin", PLUGIN, "--keyword", "fixture-private-keyword", "--limit", "7"],
                                  capture_output=True, text=True, timeout=10)
         self.assertEqual(run.returncode, 0)
         self.assertEqual(run.stderr, "")

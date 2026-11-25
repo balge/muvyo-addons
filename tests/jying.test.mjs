@@ -282,12 +282,14 @@ test('Jying validates selection IDs, page metadata and account settings before d
   ]) assert.equal(plugin.resolve({ token }).error.kind, 'rejected');
   assert.equal(plugin.calls.length, 0);
   const missing = site(() => undefined, { settings: { password: '' } });
-  assert.throws(() => missing.search(query), /账号/);
+  assert.throws(() => missing.search(query), /聚影登录账号/);
   assert.equal(missing.calls.length, 0);
 });
 
-test('Jying declares the canonical origin and required result-limit setting', () => {
+test('Jying declares its public name, canonical origin and required result-limit setting', () => {
   const manifest = JSON.parse(readFileSync(new URL('../src/balge.jying/manifest.json', import.meta.url)));
+  assert.equal(manifest.name, '聚影');
+  assert.match(manifest.description, /聚影/);
   assert.deepEqual(manifest.permissions.domains, ['www.jying.top']);
   assert.deepEqual(manifest.capabilities.search.link_types, ['115', 'magnet']);
   assert.equal(manifest.capabilities.search.resolve, true);
