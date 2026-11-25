@@ -113,17 +113,41 @@ test('a fresh invocation renews an expired login cookie while an auxiliary cooki
     },
   };
   const initial = loadRuntime(options);
-  assert.equal(makeClient(initial).request('/results').status, 200);
+  assert.equal(makeClient(initial, { authCookies: ['sid'] }).request('/results').status, 200);
 
   const beforeExpiry = loadRuntime({ ...options, store: initial.store });
-  assert.equal(makeClient(beforeExpiry).request('/results').status, 200);
+  assert.equal(makeClient(beforeExpiry, { authCookies: ['sid'] }).request('/results').status, 200);
   assert.deepEqual(beforeExpiry.calls.map(({ url }) => url), [`${origin}/results`]);
 
   time += 2_000;
   const afterExpiry = loadRuntime({ ...options, store: initial.store });
-  assert.equal(makeClient(afterExpiry).request('/results').status, 200);
+  assert.equal(makeClient(afterExpiry, { authCookies: ['sid'] }).request('/results').status, 200);
   assert.deepEqual(afterExpiry.calls.map(({ url }) => url), [`${origin}/login`, `${origin}/results`]);
   assert.equal(afterExpiry.calls[0].options.headers.Cookie, 'csrf=fake');
+});
+
+test('the expiry of an auxiliary cookie does not refresh a valid declared login cookie', () => {
+  let time = 1_700_000_000_000;
+  const options = {
+    now: () => time,
+    fetch(url, { headers }) {
+      switch (url) {
+        case `${origin}/login`: return {
+          status: 200,
+          set_cookies: ['helper=fake; Path=/; Max-Age=1', 'sid=authenticated; Path=/; Max-Age=30'],
+        };
+        case `${origin}/results`: return { status: 200, body: headers.Cookie };
+        default: throw new Error('Unexpected route');
+      }
+    },
+  };
+  const initial = loadRuntime(options);
+  assert.equal(makeClient(initial, { authCookies: ['sid'] }).request('/results').body, 'helper=fake; sid=authenticated');
+
+  time += 1_000;
+  const next = loadRuntime({ ...options, store: initial.store });
+  assert.equal(makeClient(next, { authCookies: ['sid'] }).request('/results').body, 'sid=authenticated');
+  assert.deepEqual(next.calls.map(({ url }) => url), [`${origin}/results`]);
 });
 
 test('cookies scope to normalized paths and matching domains and expire by Max-Age or Expires', () => {
@@ -318,6 +342,24 @@ test('the code in a link wins over its repeated label and separately explicit co
   ]);
 });
 
+test('a displayed share URL supplies the code when its matching href is uncoded', () => {
+  const { MP } = loadRuntime();
+  assert.deepEqual(plain(MP.extract(`<p><a href="https://115.com/s/sdemo12"><span>https://115.com/s/sdemo12?password=abcd</span></a> 提取码：wxyz</p>`)), [
+    { type: '115', url: 'https://115.com/s/sdemo12', code: 'abcd', label: 'https://115.com/s/sdemo12?password=abcd' },
+  ]);
+});
+
+test('commas and semicolons inside plain share query values preserve later passcodes', () => {
+  const { MP } = loadRuntime();
+  assert.deepEqual(plain(MP.extract(`<p>https://115.com/s/sdemo12?title=a,b&amp;password=abcd</p>
+    <p>https://115.com/s/sdemo34?title=a;b&amp;password=wxyz</p>
+    <p>https://115.com/s/sdemo56, 提取码：efgh</p>`)), [
+    { type: '115', url: 'https://115.com/s/sdemo12', code: 'abcd', label: '' },
+    { type: '115', url: 'https://115.com/s/sdemo34', code: 'wxyz', label: '' },
+    { type: '115', url: 'https://115.com/s/sdemo56', code: 'efgh', label: '' },
+  ]);
+});
+
 test('resource validators reject invalid escapes in bare query components', () => {
   const { MP } = loadRuntime();
   assert.equal(MP.magnet(`${magnet}&bare%QX`), '');
@@ -326,17 +368,20 @@ test('resource validators reject invalid escapes in bare query components', () =
 });
 
 test('limits respect both requested and configured caps and a nullable time budget', () => {
-  const { MP } = loadRuntime({ settings: { result_limit: '45' }, remainingMs: 1200 });
+  const { MP } = loadRuntime({ settings: { result_limit: '99' }, remainingMs: 1200 });
   assert.ok(MP, 'The shared runtime exposes MP');
-  assert.equal(MP.limit({}), 45);
+  assert.equal(MP.limit({}), 20);
   assert.equal(MP.limit({ limit: 2.9 }), 2);
-  assert.equal(MP.limit({ limit: 175 }), 45);
+  assert.equal(MP.limit({ limit: 175 }), 20);
   assert.equal(MP.limit({ limit: 0 }), 0);
+  assert.equal(MP.limit({ limit: -1 }), 1);
   assert.equal(MP.hasTime(1200), true);
   assert.equal(MP.hasTime(1201), false);
-  const unbounded = loadRuntime().MP;
-  assert.equal(unbounded.limit({ limit: Infinity }), 20);
-  assert.equal(unbounded.hasTime(1201), true);
+  const defaults = loadRuntime().MP;
+  assert.equal(defaults.limit({ limit: Infinity }), 5);
+  assert.equal(defaults.limit({ limit: 9 }), 5);
+  assert.equal(defaults.hasTime(1201), true);
+  assert.equal(loadRuntime({ settings: { result_limit: 0 } }).MP.limit({}), 1);
 });
 
 test('selection tokens round-trip JSON metadata and reject malformed or secret fields', () => {
