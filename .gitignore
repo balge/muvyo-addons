@@ -1,11 +1,34 @@
+# Muvyo 只读取加密签名产物（index.json、index.json.sig、plugins/）。
 src/
 dist/
 artifacts/
-.private/
 .superpowers/
 docs/superpowers/
-*.pem
+
+# 私有凭据、仓库密钥与本地探测数据。
+.private/
+muvyo-signing.json
 *signing*.json
+repo-signing.pem
+*.pem
+*.key
+.env
+.env.*
+*accounts*.json
+*credentials*.json
+*session*.json
+*cookies*.json
+*token*.json
+*.session
+*.cookies
+live-probe/
+live-probe*.log
+live-probe-*.json
+*.zip
+
+# 本地签名程序和运行环境。
 mv_addon.py
+.venv/
+__pycache__/
 node_modules/
 .DS_Store

@@ -1,0 +1,30 @@
+{
+ "version": 1,
+ "certificate": {
+  "certificate": {
+   "aud": "mediavault-addon-author",
+   "author": "balge",
+   "author_id": "gh-8251785",
+   "content_key": "hIhcOYb+H33uMVWf1IlM+Uigsb3U5PkG60CG+3UN6ho=",
+   "content_key_version": 1,
+   "expires_at": 1827135612,
+   "installation_key": "2DDljcAU4JoqkAGonDye5iTKpqSwSMb3wOLaD1ZTROQ=",
+   "issued_at": 1795599612,
+   "namespace": "balge",
+   "public_key": "xwolRGTXPqt5vuUqZx9z49wLb6J3I5Xuu2IZgagssOY=",
+   "serial": 26,
+   "version": 1
+  },
+  "signature": "qhn2pzM/nc6NGrMHaPzedl8Sb0GkuFFuigjcL+j3sU0HQ4feuYQ2+jlPlzbUPm2OxNeT6juFBRfhjM27kwizCw=="
+ },
+ "payload": {
+  "plugin_id": "balge.miniyingshi",
+  "version": "1.0.0",
+  "files": {
+   "README.md": "be38386a5e9b5a424a9c9cdd993686d989f1e4c53fe6bdf82b5a26b9aa5733d3",
+   "encrypted.json": "29fc94e3eae2a85e4c096b3ccfdd05783bf6c1a61a75333d4383a6ffd064f44e",
+   "manifest.json": "f249082cbb6899d0ab8079485c270bcdad13d55255f7b041cb9937a16fface26"
+  }
+ },
+ "signature": "ZanszcKgHjrJhfCajquhYjzVIQDdpEV+GzjTxdi+i5iN38hvRH4EtvIKmTokWXlqXw7W2uS5CLYBB51ba668AA=="
+}

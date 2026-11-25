@@ -1,0 +1,34 @@
+{
+  "name": "Muvyo Addons",
+  "sequence": 3,
+  "plugins": [
+    {
+      "id": "balge.jying",
+      "name": "鲸影",
+      "version": "1.0.0",
+      "description": "搜索鲸影的 115 分享与磁力链接。",
+      "author": "balge",
+      "path": "plugins/balge.jying",
+      "api": 1
+    },
+    {
+      "id": "balge.miniyingshi",
+      "name": "迷你影视",
+      "version": "1.0.0",
+      "description": "搜索迷你影视的 115 分享与磁力链接。",
+      "author": "balge",
+      "path": "plugins/balge.miniyingshi",
+      "api": 1
+    },
+    {
+      "id": "balge.woniu",
+      "name": "蜗牛 4K",
+      "version": "1.0.0",
+      "description": "搜索蜗牛 4K的 115 分享与磁力链接。",
+      "author": "balge",
+      "path": "plugins/balge.woniu",
+      "api": 1
+    }
+  ],
+  "public_key": "zmBPkHS4ZGZl4CQCM7iXNCsaacol03VAT5gN349wKuk="
+}
