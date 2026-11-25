@@ -135,6 +135,38 @@ test('mixed searches reserve a slot for another type on a later title page', () 
   assert.deepEqual(paths(site), ['/api/auth/login', '/api/search/titles', '/api/titles/Movie1/torrents', '/api/search/titles', '/api/titles/Later1/netdisk-shares']);
 });
 
+test('mixed searches fill from the first list with bounded requests when the other type is absent', async t => {
+  const titles = Array.from({ length: 42 }, (_, i) => ({ ...title, id: `Movie${i}` }));
+  const torrents = Array.from({ length: 20 }, (_, i) => ({ id: `Torrent${i}`, kind: 1 }));
+  const shares = Array.from({ length: 20 }, (_, i) => ({ id: `Share${i}`, provider: 7 }));
+  for (const [available, settings, requested, count] of [
+    ['magnet', '20', 2, 2], ['magnet', undefined, 50, 5], ['magnet', '20', 50, 20],
+    ['115', '20', 50, 20],
+  ]) {
+    await t.test(`${available} fills ${count} slots`, () => {
+      const pages = { '/api/search/titles': searchPage(titles) };
+      for (const { id } of titles) {
+        pages[`/api/titles/${id}/netdisk-shares`] = success({ list: [{ id: `Other${id}`, provider: 1 }] });
+        pages[`/api/titles/${id}/torrents`] = success({ items: [] });
+      }
+      if (available === 'magnet') {
+        pages['/api/titles/Movie0/torrents'] = success({ items: torrents });
+      } else {
+        pages['/api/titles/Movie0/netdisk-shares'] = success({ list: shares });
+      }
+      const site = plugin(pages, { result_limit: settings });
+      const result = site.search({ ...query, limit: requested });
+      const observed = `${result.items.length} items, ${site.calls.length} HTTP requests, partial=${Boolean(result.partial)}`;
+      t.diagnostic(`${available} cap ${count}: ${observed}`);
+      assert.equal(result.items.length, count, observed);
+      assert.ok(site.calls.length <= 6, observed); // Login, title page, both lists and at most two nearby reads.
+      assert.ok(!result.partial, observed);
+      assert.ok(result.items.every(item => item.link_type === available));
+      assert.equal(new Set(result.items.map(item => item.id)).size, count);
+    });
+  }
+});
+
 test('default 5 and maximum 20 stop before an avoidable page, group or credential read', () => {
   const rows = Array.from({ length: 22 }, (_, index) => ({ id: `Share${index}`, provider: 7, title: `Share ${index}` }));
   const many = {
