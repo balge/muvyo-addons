@@ -207,6 +207,36 @@ test('a resource HTTP 401 refreshes once and login errors stay visible', () => {
   }
 });
 
+test('a gated selected read uses the same one-refresh allowance in either recovery order', () => {
+  const path = '/api/netdisk-shares/Share1/credential';
+  for (const statuses of [[403, 401, 200], [401, 403, 200], [401, 403, 401]]) {
+    let auth = 0;
+    let read = 0;
+    const site = plugin({
+      '/api/auth/login': () => success({}, { set_cookies: [`mys_at=fixture-session-${++auth}; Path=/; Secure`] }),
+      '/api/gate': success(null, { set_cookies: ['mys_js=fixture-gate; Path=/; Secure'] }),
+      [path]: (_, { headers }) => {
+        const index = read++;
+        const status = statuses[index];
+        if (index > statuses.indexOf(403)) assert.match(headers.Cookie, /(?:^|; )mys_js=fixture-gate(?:;|$)/);
+        if (index > statuses.indexOf(401)) assert.match(headers.Cookie, /(?:^|; )mys_at=fixture-session-2(?:;|$)/);
+        return status === 200
+          ? success({ id: 'Share1', shareURL: 'https://115.com/s/sharetest', accessCode: 'a1b2' })
+          : { status, headers: status === 403 ? { 'x-mys-gate': 'required' } : {}, body: '' };
+      },
+    });
+    const result = site.resolve({ token: site.MP.token({ id: 'Share1', type: '115' }) });
+    if (statuses[2] === 200) {
+      assert.deepEqual(plain(result), { share_link: 'https://115.com/s/sharetest', share_code: 'a1b2' });
+    } else {
+      assert.equal(result.error.kind, 'source');
+      assert.match(result.error.message, /登录/);
+    }
+    const recovery = statuses[0] === 403 ? ['/api/gate', '/api/auth/login'] : ['/api/auth/login', '/api/gate'];
+    assert.deepEqual(paths(site), ['/api/auth/login', path, recovery[0], path, recovery[1], path]);
+  }
+});
+
 test('invalid tokens and missing selected resources return structured rejections', () => {
   const site = plugin({ '/api/netdisk-shares/Share1/credential': { status: 404, body: '' } });
   const invalid = site.MP.token({ id: '../other', type: '115' });
@@ -238,6 +268,30 @@ test('returns completed items before its time budget is exhausted', () => {
   assert.deepEqual(plain(items.map(row => row.id)), ['magnet:Direct1']);
   assert.equal(partial, true);
   assert.deepEqual(paths(site), ['/api/auth/login', '/api/search/titles', '/api/titles/Movie1/torrents']);
+});
+
+test('refresh consuming the deadline returns collected items without sending a stale replay', () => {
+  let remainingMs = 8000;
+  let logins = 0;
+  let shareReads = 0;
+  const sharePath = '/api/titles/Movie1/netdisk-shares';
+  const site = plugin({
+    ...routes,
+    '/api/auth/login': () => {
+      if (++logins === 2) remainingMs = 1100;
+      return login();
+    },
+    '/api/titles/Movie1/torrents': () => {
+      remainingMs = 5500;
+      return routes['/api/titles/Movie1/torrents'];
+    },
+    [sharePath]: () => ++shareReads === 1 ? { status: 401, body: '' } : routes[sharePath],
+  }, { result_limit: '2' }, { remainingMs: () => remainingMs });
+  const result = site.search(query);
+  assert.deepEqual(plain(result.items).map(row => row.id), ['magnet:Direct1']);
+  assert.equal(result.partial, true);
+  assert.equal(shareReads, 1);
+  assert.deepEqual(paths(site), ['/api/auth/login', '/api/search/titles', '/api/titles/Movie1/torrents', sharePath, '/api/auth/login']);
 });
 
 test('manifest declares the standalone settings and permissions used by the adapter', () => {

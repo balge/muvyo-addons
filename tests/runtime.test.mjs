@@ -59,6 +59,35 @@ test('a 401 triggers one new login and returns the refreshed response', () => {
   assert.equal(logins, 3);
 });
 
+test('client computes the timeout at each dispatch, including both authenticated sends', () => {
+  let remainingMs = 6500;
+  let logins = 0;
+  let reads = 0;
+  const host = loadRuntime({
+    remainingMs: () => remainingMs,
+    fetch(url) {
+      if (url === `${origin}/login`) {
+        remainingMs = ++logins === 1 ? 4800 : 2600;
+        return { status: 200, set_cookies: [`sid=fake-${logins}; Path=/`] };
+      }
+      assert.equal(url, `${origin}/results`);
+      if (++reads === 1) {
+        remainingMs = 3700;
+        return { status: 401 };
+      }
+      return { status: 200 };
+    },
+  });
+  const client = makeClient(host, {
+    authCookies: ['sid'],
+    timeoutForSend: (timeout = 6) => Math.min(timeout, Math.floor((remainingMs - 200) / 1000)),
+  });
+  assert.equal(client.request('/results', { timeout: 5 }).status, 200);
+  assert.deepEqual(host.calls.map(({ url, options }) => [url, options.timeout]), [
+    [`${origin}/login`, 6], [`${origin}/results`, 4], [`${origin}/login`, 3], [`${origin}/results`, 2],
+  ]);
+});
+
 test('403, 429 and transport errors reuse the existing session without login retries', () => {
   const host = loadRuntime({
     fetch(url) {
