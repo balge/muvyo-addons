@@ -1,0 +1,11 @@
+src/
+dist/
+artifacts/
+.private/
+.superpowers/
+docs/superpowers/
+*.pem
+*signing*.json
+mv_addon.py
+node_modules/
+.DS_Store
