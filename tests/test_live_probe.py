@@ -116,6 +116,64 @@ class LiveProbeTests(unittest.TestCase):
                 self.assertEqual(probe.proxy_for(URL, True), {"https": "http://proxy.example:80"})
                 self.assertEqual(probe.proxy_for(URL, False), {})
 
+    def test_quickjs_sleep_advances_wall_time_and_spends_request_deadline(self):
+        entry = """
+          function search({url}) {
+            const started = Date.now();
+            const before = mv.time.remainingMs();
+            mv.sleep(35);
+            const after = mv.time.remainingMs();
+            const response = mv.fetch({url, timeout: 10});
+            return {elapsed: Date.now() - started, before, after, status: response.status};
+          }
+        """
+        sends = []
+
+        def send(_url, _method, _headers, _body, timeout, _proxy):
+            sends.append(timeout)
+            return 200, [], b"", False
+
+        result, stats = probe.run_entry(entry, PLUGIN, {}, {}, "search", {"url": URL},
+                                        time.monotonic() + 1, send)
+        self.assertIsNotNone(result)
+        self.assertGreaterEqual(result["elapsed"], 35)
+        self.assertGreaterEqual(result["before"] - result["after"], 35)
+        self.assertEqual(result["status"], 200)
+        self.assertEqual(stats["requests"], 1)
+        self.assertLessEqual(sends[0], 0.965)
+
+    def test_quickjs_rejects_sleep_above_per_wait_total_or_invocation_limits(self):
+        entry = """
+          function search({pauses}) {
+            return pauses.map(ms => {
+              try { mv.sleep(ms); return true; }
+              catch (error) { return error.name === 'RangeError' ? false : error.name; }
+            });
+          }
+        """
+        now = 0
+        sleeps = []
+
+        def advance(seconds):
+            nonlocal now
+            now += seconds
+            sleeps.append(seconds)
+
+        with patch.object(probe.time, "monotonic", side_effect=lambda: now):
+            with patch.object(probe.time, "sleep", side_effect=advance):
+                result, stats = probe.run_entry(entry, PLUGIN, {}, {}, "search", {
+                    "pauses": [10001, 10000, 10000, 10000, 1, -1, "1", True],
+                }, deadline=60)
+                self.assertEqual(result, [False, True, True, True, False, False, False, False])
+                self.assertEqual(sleeps, [10, 10, 10])
+                self.assertEqual(stats["requests"], 0)
+
+                result, _ = probe.run_entry(entry, PLUGIN, {}, {}, "search", {
+                    "pauses": [5001, 3000, 2000, 1],
+                }, deadline=35)
+                self.assertEqual(result, [False, True, False, True])
+                self.assertEqual(sleeps, [10, 10, 10, 3, 0.001])
+
     def test_cli_prints_only_sanitized_selected_result(self):
         entry = """
           let cleanContext = true;

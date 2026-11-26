@@ -44,7 +44,7 @@ function site(handler, options = {}) {
   return loadPlugin('balge.woniu', {
     ...options,
     settings: { ...settings, ...options.settings },
-    fetch(url, input) {
+    fetch(url, input, at) {
       assert.ok(url.startsWith(origin + '/'));
       assert.equal(input.follow_redirects, false);
       const path = url.slice(origin.length);
@@ -52,7 +52,7 @@ function site(handler, options = {}) {
         assert.equal(input.method, 'POST');
         assert.equal(input.body, 'user_name=fixture%2Bname&user_pwd=fixture%26password');
       }
-      const response = handler(path, input);
+      const response = handler(path, input, at);
       if (response) return response;
       if (path === loginPath) return loggedIn;
       throw new Error('Unexpected path ' + path);
@@ -234,4 +234,128 @@ test('Woniu resolves a passcode also presented in a separate row for the same sh
   });
   const token = plugin.search({ ...query, limit: 1 }).items[0].resolve_token;
   assert.equal(plugin.resolve({ token }).share_code, '9abc');
+});
+
+const ratePage = (seconds = 3) => ok('<main class="main"><div class="container page-empty">' +
+  '<h2>请不要频繁操作，搜索时间间隔为' + seconds + '秒前</h2>' +
+  '<p><a class="btn btn-primary" href="javascript:history.back(-1);">立即前往</a></p></div></main>');
+
+test('Woniu spaces three seasonal searches across contexts while reusing one PHP session', () => {
+  const store = new Map();
+  const attempts = [];
+  let now = 100000;
+  const run = keyword => {
+    const plugin = site((path, input, at) => {
+      attempts.push([path, at]);
+      if (path !== loginPath) {
+        assert.match(input.headers.Cookie, /PHPSESSID=fixture-php-session/);
+        return ok(page([]));
+      }
+      return { ...loggedIn, set_cookies: [...loggedIn.set_cookies, 'PHPSESSID=fixture-php-session; Path=/; Secure'] };
+    }, { store, now: () => now, advanceClock: ms => { now += ms; } });
+    assert.equal(plugin.search({ keyword }).items.length, 0);
+  };
+  run('地球');
+  run('地球 S02');
+  run('地球 第二季');
+  assert.equal(attempts.length, 4);
+  assert.equal(attempts[0][0], loginPath);
+  assert.equal(new Set(attempts.slice(1).map(([path]) => path)).size, 3);
+  assert.deepEqual(attempts.map(([, at]) => at), [100000, 100000, 103000, 106000]);
+});
+
+test('Woniu spaces pagination while details and resolve run immediately', () => {
+  const attempts = [];
+  const plugin = site((path, _input, at) => {
+    attempts.push([path, at]);
+    if (path === searchPath) return ok(page([1], nextPath));
+    if (path === nextPath) return ok(page([2]));
+    if (path === detail(1)) return ok(group(row('115', copyURL)));
+    if (path === detail(2)) return ok(group(row('magnet', magnet)));
+  }, { now: 100000 });
+  const items = plugin.search({ ...query, limit: 2 }).items;
+  assert.equal(items.length, 2);
+  assert.equal(plugin.resolve({ token: items[0].resolve_token }).share_link, share);
+  assert.deepEqual(attempts, [[loginPath, 100000], [searchPath, 100000], [detail(1), 100000],
+    [nextPath, 103000], [detail(2), 103000], [detail(1), 103000]]);
+});
+
+test('Woniu replays the site rate page once after its stated interval and learns a longer pace', () => {
+  for (const seconds of [3, 5]) {
+    const store = new Map();
+    const attempts = [];
+    let now = 100000;
+    const host = { store, now: () => now, advanceClock: ms => { now += ms; } };
+    const first = site((path, input, at) => {
+      if (path !== searchPath) return;
+      assert.match(input.headers.Cookie, /user_check=fake-session/);
+      attempts.push(at);
+      return attempts.length === 1 ? ratePage(seconds) : ok(page([]));
+    }, host);
+    assert.equal(first.search(query).items.length, 0);
+    assert.deepEqual(paths(first), [loginPath, searchPath, searchPath]);
+    const fresh = site((path, _input, at) => {
+      if (path !== searchPath) return;
+      attempts.push(at);
+      return ok(page([]));
+    }, host);
+    assert.equal(fresh.search(query).items.length, 0);
+    assert.deepEqual(paths(fresh), [searchPath]);
+    assert.deepEqual(attempts, [100000, 100000 + seconds * 1000, 100000 + seconds * 2000]);
+  }
+});
+
+test('Woniu preserves collected details when the pagination wait would leave too little time', () => {
+  const plugin = site(path => {
+    if (path === searchPath) return ok(page([1], nextPath));
+    if (path === detail(1)) return ok(group(row('115', copyURL)));
+    if (path === nextPath) return ok(page([]));
+  }, { now: 100000, remainingMs: 4199 });
+  const result = plugin.search(query);
+  assert.equal(result.partial, true);
+  assert.equal(result.items.length, 1);
+  assert.deepEqual(paths(plugin), [loginPath, searchPath, detail(1)]);
+});
+
+test('Woniu keeps the visible rate error after two rate pages and never replays unknown HTML', () => {
+  const denied = site(path => path === searchPath ? ratePage() : undefined, { now: 100000 });
+  assert.throws(() => denied.search(query), { kind: 'rate' });
+  assert.deepEqual(paths(denied), [loginPath, searchPath, searchPath]);
+
+  const unknown = site(path => path === searchPath ? ok('<div class="page-empty"><h2>站点临时维护</h2></div>') : undefined);
+  assert.throws(() => unknown.search(query), /格式异常/);
+  assert.deepEqual(paths(unknown), [loginPath, searchPath]);
+});
+
+test('Woniu refuses a rate wait above the host single-wait limit', () => {
+  const plugin = site(path => path === searchPath ? ratePage(11) : undefined, { now: 100000 });
+  assert.equal(plugin.search(query).partial, true);
+  assert.deepEqual(paths(plugin), [loginPath, searchPath]);
+});
+
+test('Woniu stops before exceeding the cumulative sleep allowance while preserving a prior item', () => {
+  const plugin = site(path => {
+    if (path === searchPath) return ok(page([1], nextPath));
+    const match = /-{10}(\d+)-{3}\/$/.exec(path);
+    if (match) {
+      const following = nextPath.replace('2---/', Number(match[1]) + 1 + '---/');
+      return ok(page([1], following));
+    }
+    if (path === detail(1)) return ok(group(row('115', copyURL)));
+  }, { now: 100000 });
+  const result = plugin.search(query);
+  assert.equal(result.partial, true);
+  assert.equal(result.items.length, 1);
+  assert.equal(paths(plugin).filter(path => path.startsWith('/vodsearch/')).length, 11);
+});
+
+test('Woniu paces the actual search retry after a 401 without delaying login', () => {
+  const attempts = [];
+  let reads = 0;
+  const plugin = site((path, _input, at) => {
+    attempts.push([path, at]);
+    if (path === searchPath) return ++reads === 1 ? { status: 401 } : ok(page([]));
+  }, { now: 100000 });
+  assert.equal(plugin.search(query).items.length, 0);
+  assert.deepEqual(attempts, [[loginPath, 100000], [searchPath, 100000], [loginPath, 100000], [searchPath, 103000]]);
 });

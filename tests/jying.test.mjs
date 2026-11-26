@@ -343,3 +343,90 @@ test('Jying prefers a current target passcode to an older listing passcode', () 
   const token = plugin.MP.token({ type: '115', movieId: 379, resourceId: 1, page: 1, pageSize: 5 });
   assert.equal(plugin.resolve({ token }).share_code, 'new1');
 });
+
+test('Jying honors Retry-After seconds across contexts and reuses its saved token at expiry', () => {
+  const store = new Map();
+  const first = site(path => path === searchPath(5) ? {
+    status: 429, headers: { 'retry-after': '120' },
+  } : undefined, { store, now: 100000 });
+  assert.throws(() => first.search(query), { kind: 'rate' });
+  assert.deepEqual(paths(first), [csrfPath, loginPath, searchPath(5)]);
+
+  const later = site(() => undefined, { store, now: 219999 });
+  assert.throws(() => later.search(query), { kind: 'rate' });
+  assert.deepEqual(paths(later), []);
+
+  const resumed = site((path, input) => {
+    if (path !== searchPath(5)) return;
+    assert.equal(input.headers['X-App-User-Token'], appToken);
+    return movies([]);
+  }, { store, now: 220000 });
+  assert.equal(resumed.search(query).items.length, 0);
+  assert.deepEqual(paths(resumed), [searchPath(5)]);
+});
+
+test('Jying honors a future HTTP date and uses a 60-second local fallback for unusable Retry-After', () => {
+  const now = Date.UTC(2026, 10, 26, 9, 0);
+  for (const [header, delay] of [
+    ['Thu, 26 Nov 2026 09:01:30 GMT', 90000],
+    ['Thursday, 26-Nov-26 09:01:30 GMT', 90000],
+    ['Thu Nov 26 09:01:30 2026', 90000],
+    [undefined, 60000],
+    ['invalid', 60000],
+    ['Thu, 31 Nov 2026 09:01:30 GMT', 60000],
+    ['0', 60000],
+    ['1.5', 60000],
+    ['Thu, 26 Nov 2026 08:59:59 GMT', 60000],
+  ]) {
+    const store = new Map();
+    const first = site(path => path === csrfPath ? {
+      status: 429, headers: header === undefined ? {} : { 'retry-after': header },
+    } : undefined, { store, now });
+    assert.throws(() => first.search(query), { kind: 'rate' });
+    assert.deepEqual(paths(first), [csrfPath]);
+
+    const before = site(() => undefined, { store, now: now + delay - 1 });
+    assert.throws(() => before.search(query), { kind: 'rate' });
+    assert.deepEqual(paths(before), []);
+
+    const resumed = site(path => path === searchPath(5) ? movies([]) : undefined, { store, now: now + delay });
+    assert.equal(resumed.search(query).items.length, 0);
+    assert.deepEqual(paths(resumed), [csrfPath, loginPath, searchPath(5)]);
+  }
+});
+
+test('Jying cooldown from login also blocks resolve and applies only to the matching account', () => {
+  const store = new Map();
+  const denied = site(path => path === loginPath ? {
+    status: 429, headers: { 'retry-after': '120' },
+  } : undefined, { store, now: 100000 });
+  assert.throws(() => denied.search(query), { kind: 'rate' });
+  assert.deepEqual(paths(denied), [csrfPath, loginPath]);
+
+  const resolve = site(() => undefined, { store, now: 100001 });
+  const token = resolve.MP.token({ type: '115', movieId: 379, resourceId: 101, page: 1, pageSize: 5 });
+  assert.match(resolve.resolve({ token }).error.message, /受限/);
+  assert.deepEqual(paths(resolve), []);
+
+  const other = site(path => path === searchPath(5) ? movies([]) : undefined,
+    { store, now: 100001, settings: { password: 'different-fixture-password' } });
+  assert.equal(other.search(query).items.length, 0);
+  assert.deepEqual(paths(other), [csrfPath, loginPath, searchPath(5)]);
+});
+
+test('Jying returns already collected items from later-page 429 while saving the cooldown', () => {
+  const store = new Map();
+  const plugin = site(path => {
+    if (path === searchPath(5)) return movies();
+    if (path === listPath(5)) return resources([resource(101)], true);
+    if (path === listPath(5, 2)) return { status: 429 };
+  }, { store, now: 100000 });
+  const result = plugin.search(query);
+  assert.equal(result.partial, true);
+  assert.equal(result.items.length, 1);
+  assert.deepEqual(paths(plugin), [csrfPath, loginPath, searchPath(5), listPath(5), listPath(5, 2)]);
+
+  const next = site(() => undefined, { store, now: 100001 });
+  assert.throws(() => next.search(query), { kind: 'rate' });
+  assert.deepEqual(paths(next), []);
+});

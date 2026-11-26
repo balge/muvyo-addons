@@ -39,6 +39,8 @@ SOURCES = {
 }
 LINK_TYPES = ("115", "magnet")
 MAX_REQUESTS = 30
+MAX_SLEEP_MS = 10000
+TOTAL_SLEEP_LIMIT_MS = 30000
 MAX_BODY = 4 * 1024 * 1024
 MAX_RESULT = 256 * 1024
 
@@ -121,10 +123,19 @@ class Invocation:
         self.plugin_id = plugin_id
         self.deadline = deadline
         self.send = send
+        self.slept_ms = 0
         self.stats = {"requests": 0, "http_statuses": {}, "bridge_errors": 0}
 
     def remaining_ms(self):
         return max(0, int((self.deadline - time.monotonic()) * 1000))
+
+    def sleep(self, ms):
+        if (type(ms) not in (int, float) or not math.isfinite(ms) or not 0 <= ms <= MAX_SLEEP_MS or
+                self.slept_ms + ms > TOTAL_SLEEP_LIMIT_MS or ms >= self.remaining_ms()):
+            return False
+        time.sleep(ms / 1000)
+        self.slept_ms += ms
+        return True
 
     def fetch(self, query):
         params = json.loads(query)
@@ -209,12 +220,13 @@ def run_entry(entry, plugin_id, settings, store, call, args, deadline, send=send
     context.add_callable("_muvyo_set", storage_set)
     context.add_callable("_muvyo_remove", lambda key: store.pop(key, None) is not None)
     context.add_callable("_muvyo_remaining", invocation.remaining_ms)
+    context.add_callable("_muvyo_sleep", invocation.sleep)
     context.add_callable("_muvyo_sha256", lambda value: hashlib.sha256(value.encode("utf-8")).hexdigest())
     context.add_callable("_muvyo_encode", lambda value: base64.b64encode(value.encode("utf-8")).decode("ascii"))
     context.add_callable("_muvyo_decode", lambda value: base64.b64decode(value, validate=True).decode("utf-8"))
 
     context.eval("""
-      globalThis.mv = ((fetch, get, set, remove, remainingMs, sha256, base64Encode, base64Decode) => ({
+      globalThis.mv = ((fetch, get, set, remove, remainingMs, sleep, sha256, base64Encode, base64Decode) => ({
         config: """ + json.dumps(settings) + """,
         fetch: request => {
           const raw = fetch(JSON.stringify(request));
@@ -227,9 +239,12 @@ def run_entry(entry, plugin_id, settings, store, call, args, deadline, send=send
           remove: key => { remove(key); },
         },
         time: { remainingMs },
+        sleep: ms => {
+          if (!sleep(ms)) throw new RangeError('Sleep exceeds the host limits');
+        },
         crypto: { sha256, base64Encode, base64Decode },
       }))(_muvyo_fetch, _muvyo_get, _muvyo_set, _muvyo_remove, _muvyo_remaining,
-          _muvyo_sha256, _muvyo_encode, _muvyo_decode);
+          _muvyo_sleep, _muvyo_sha256, _muvyo_encode, _muvyo_decode);
       for (const key of Object.keys(globalThis)) {
         if (key.startsWith('_muvyo_')) delete globalThis[key];
       }
