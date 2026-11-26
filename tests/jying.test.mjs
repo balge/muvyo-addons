@@ -365,6 +365,21 @@ test('Jying honors Retry-After seconds across contexts and reuses its saved toke
   assert.deepEqual(paths(resumed), [searchPath(5)]);
 });
 
+test('Jying keeps oversized positive Retry-After delays active past the fallback deadline', () => {
+  for (const header of ['9007199254741', '9'.repeat(400)]) {
+    const store = new Map();
+    const first = site(path => path === searchPath(5) ? {
+      status: 429, headers: { 'retry-after': header },
+    } : undefined, { store, now: 100000 });
+    assert.throws(() => first.search(query), { kind: 'rate' });
+    assert.deepEqual(paths(first), [csrfPath, loginPath, searchPath(5)]);
+
+    const later = site(path => path === searchPath(5) ? movies([]) : undefined, { store, now: 160001 });
+    assert.throws(() => later.search(query), { kind: 'rate' });
+    assert.deepEqual(paths(later), []);
+  }
+});
+
 test('Jying honors a future HTTP date and uses a 60-second local fallback for unusable Retry-After', () => {
   const now = Date.UTC(2026, 10, 26, 9, 0);
   for (const [header, delay] of [
@@ -418,12 +433,12 @@ test('Jying returns already collected items from later-page 429 while saving the
   const store = new Map();
   const plugin = site(path => {
     if (path === searchPath(5)) return movies();
-    if (path === listPath(5)) return resources([resource(101)], true);
+    if (path === listPath(5)) return resources([resource(101), resource(102, 'MagnetLink')], true);
     if (path === listPath(5, 2)) return { status: 429 };
   }, { store, now: 100000 });
   const result = plugin.search(query);
   assert.equal(result.partial, true);
-  assert.equal(result.items.length, 1);
+  assert.deepEqual(Array.from(result.items, item => item.id), ['115:101', 'magnet:102']);
   assert.deepEqual(paths(plugin), [csrfPath, loginPath, searchPath(5), listPath(5), listPath(5, 2)]);
 
   const next = site(() => undefined, { store, now: 100001 });
