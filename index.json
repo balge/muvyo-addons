@@ -1,11 +1,11 @@
 {
  "name": "Muvyo Addons",
- "sequence": 5,
+ "sequence": 7,
  "plugins": [
   {
    "id": "balge.jying",
    "name": "聚影",
-   "version": "1.0.0",
+   "version": "1.0.1",
    "description": "搜索聚影的 115 分享与磁力链接。",
    "author": "balge",
    "path": "plugins/balge.jying",
@@ -23,7 +23,7 @@
   {
    "id": "balge.woniu",
    "name": "蜗牛 4K",
-   "version": "1.0.0",
+   "version": "1.0.1",
    "description": "搜索蜗牛 4K的 115 分享与磁力链接。",
    "author": "balge",
    "path": "plugins/balge.woniu",
