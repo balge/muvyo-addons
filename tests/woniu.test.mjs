@@ -388,3 +388,18 @@ test('Woniu reports the failed stage and a fixed transport category without leak
     }
   }
 });
+
+test('Woniu applies its module connection mode to login, search, details and v4 resolution', () => {
+  for (const [network_mode, expectedProxy] of [[undefined, false], ['direct', false], ['proxy', true]]) {
+    const sent = [];
+    const plugin = site((path, input) => {
+      sent.push([path, input.proxy]);
+      if (path === searchPath) return ok(page([7128]));
+      if (path === detail(7128)) return ok(group(row('115', copyURL)));
+    }, { settings: network_mode ? { network_mode } : {} });
+    const result = plugin.search({ ...query, limit: 1 });
+    assert.equal(plugin.resolveLink({ token: result.items[0].resolve_token }).share_link, share);
+    assert.deepEqual(sent, [[loginPath, expectedProxy], [searchPath, expectedProxy],
+      [detail(7128), expectedProxy], [detail(7128), expectedProxy]]);
+  }
+});

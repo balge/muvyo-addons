@@ -59,7 +59,13 @@ function manifestFrom(bytes, id) {
   }, `${id} search capabilities`);
   requireValue(Array.isArray(manifest.config), `${id} has invalid settings`);
   showExact(manifest.config.map(({ key }) => key),
-    ['username', 'password', 'result_limit', 'resource_types'], `${id} settings`);
+    ['username', 'password', 'result_limit', 'resource_types', ...(id === 'balge.woniu' ? ['network_mode'] : [])], `${id} settings`);
+  if (id === 'balge.woniu') {
+    requireEqual(manifest.config.find(({ key }) => key === 'network_mode'), {
+      key: 'network_mode', label: '连接方式', type: 'select', default: 'direct',
+      options: [{ value: 'direct', label: '直连' }, { value: 'proxy', label: '使用系统代理' }],
+    }, `${id} network_mode`);
+  }
   for (const [key, type] of [['username', 'text'], ['password', 'secret']]) {
     const { required, ...setting } = manifest.config.find((field) => field.key === key);
     requireValue(required === true && setting.type === type && setting.label &&
