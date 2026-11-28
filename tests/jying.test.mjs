@@ -72,7 +72,8 @@ function site(handler, options = {}) {
 
 const paths = plugin => plugin.calls.map(({ url }) => url.slice(origin.length));
 
-test('Jying emits metadata-only items, rereads selected rows and uses fresh tickets', () => {
+for (const entry of ['resolve', 'resolveLink']) {
+test(`${entry}: Jying emits metadata-only items, rereads selected rows and uses fresh tickets`, () => {
   let lists = 0;
   const plugin = site((path, input) => {
     if (path === searchPath(2)) {
@@ -104,14 +105,16 @@ test('Jying emits metadata-only items, rereads selected rows and uses fresh tick
   assert.doesNotMatch(JSON.stringify(plugin.MP.untoken(items[1].resolve_token)), /fresh|csrf|token|1abc/i);
   assert.deepEqual(paths(plugin), [csrfPath, loginPath, searchPath(2), listPath(2)]);
 
-  const shareResult = plugin.resolve({ token: items[1].resolve_token });
+  const shareResult = plugin[entry]({ token: items[1].resolve_token });
   assert.equal(shareResult.share_link, share);
   assert.equal(shareResult.share_code, '1abc');
-  assert.equal(plugin.resolve({ token: items[0].resolve_token }).magnets[0], magnet);
+  assert.equal(plugin[entry]({ token: items[0].resolve_token }).magnets[0], magnet);
   assert.equal(paths(plugin).filter(path => path === listPath(2)).length, 3);
   assert.equal(paths(plugin).filter(path => path === loginPath).length, 1);
   assert.deepEqual(paths(plugin).filter(path => path.includes('/access/')), [accessPath(102), accessPath(101)]);
 });
+}
+
 
 test('Jying ignores hidden, unavailable or paid rows and accepts explicitly owned positive-price rows', () => {
   const plugin = site(path => {
@@ -444,4 +447,20 @@ test('Jying returns already collected items from later-page 429 while saving the
   const next = site(() => undefined, { store, now: 100001 });
   assert.throws(() => next.search(query), { kind: 'rate' });
   assert.deepEqual(paths(next), []);
+});
+
+test('Jying resolveLink preserves account cooldown across fresh contexts without relogin', () => {
+  const store = new Map();
+  const throttled = site(path => path === loginPath ? {
+    status: 429, headers: { 'retry-after': '120' },
+  } : undefined, { store, now: 100000 });
+  assert.throws(() => throttled.search(query), { kind: 'rate' });
+  const resumed = site(() => undefined, { store, now: 100001 });
+  const token = resumed.MP.token({ type: '115', movieId: 379, resourceId: 101, page: 1, pageSize: 5 });
+  assert.equal(resumed.resolveLink({ token }).error.kind, 'source');
+  assert.deepEqual(paths(resumed), []);
+  for (const args of [undefined, {}, { token: 'invalid' }]) {
+    assert.equal(resumed.resolveLink(args).error.kind, 'rejected');
+  }
+  assert.deepEqual(paths(resumed), []);
 });

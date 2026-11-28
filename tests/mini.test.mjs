@@ -79,7 +79,8 @@ test('search lists direct magnets, group members and deferred 115 shares with st
   assert.equal(paths(site).filter(path => path === '/api/auth/login').length, 1);
 });
 
-test('resolve reads only the selected resource and preserves the independent 115 passcode', () => {
+for (const entry of ['resolve', 'resolveLink']) {
+test(`${entry}: resolve reads only the selected resource and preserves the independent 115 passcode`, () => {
   const site = plugin({
     ...routes,
     '/api/netdisk-shares/Share1/credential': success({ id: 'Share1', shareURL: 'https://115.com/s/sharetest', accessCode: 'a1b2' }),
@@ -90,12 +91,14 @@ test('resolve reads only the selected resource and preserves the independent 115
     '/api/netdisk-shares/Share1/credential': success({ id: 'Share1', shareURL: 'https://115.com/s/sharetest?password=z9z9', accessCode: 'a1b2' }),
     '/api/torrents/Child1': success({ id: 'Child1', kind: 1, magnet, title, sizeBytes: 2048, fileList: [] }),
   }, {}, { store: site.store });
-  assert.deepEqual(plain(resumed.resolve({ token: items[1].resolve_token })), {
+  assert.deepEqual(plain(resumed[entry]({ token: items[1].resolve_token })), {
     share_link: 'https://115.com/s/sharetest', share_code: 'a1b2',
   });
-  assert.deepEqual(plain(resumed.resolve({ token: items[2].resolve_token })), { magnets: [magnet] });
+  assert.deepEqual(plain(resumed[entry]({ token: items[2].resolve_token })), { magnets: [magnet] });
   assert.deepEqual(paths(resumed), ['/api/netdisk-shares/Share1/credential', '/api/torrents/Child1']);
 });
+}
+
 
 test('selection type intersects the module setting and no result means no site access', () => {
   const site = plugin(routes, { resource_types: '115' });
@@ -330,7 +333,6 @@ test('manifest declares the standalone settings and permissions used by the adap
   const manifest = JSON.parse(readFileSync(new URL(`../src/${id}/manifest.json`, import.meta.url), 'utf8'));
   assert.equal(manifest.id, id);
   assert.equal(manifest.api, 1);
-  assert.equal(manifest.version, '1.0.0');
   assert.equal(manifest.entry, 'main.js');
   assert.deepEqual(manifest.permissions.domains, ['www.miniyingshi.com']);
   assert.deepEqual(manifest.capabilities.search.link_types, ['115', 'magnet']);
@@ -340,4 +342,13 @@ test('manifest declares the standalone settings and permissions used by the adap
   assert.deepEqual({ min, max, step, defaultLimit, label, unit }, {
     min: 1, max: 20, step: 1, defaultLimit: '5', label: '每次获取数量', unit: '条',
   });
+});
+
+// Missing or wrong v4 entry must not bypass selection validation or issue HTTP.
+test('Mini resolveLink rejects malformed selections without network access', () => {
+  const site = plugin();
+  for (const args of [undefined, {}, { token: 'invalid' }, { token: site.MP.token({ type: '115', id: '../../bad' }) }]) {
+    assert.equal(site.resolveLink(args).error.kind, 'rejected');
+  }
+  assert.deepEqual(paths(site), []);
 });

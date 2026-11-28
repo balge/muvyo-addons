@@ -26,6 +26,7 @@ function loadSources(site, {
 } = {}) {
   const runtime = readFileSync(new URL('shared/runtime.js', sourceRoot), 'utf8');
   const calls = [];
+  const logs = [];
   const config = jsonCopy(settings);
   let elapsedMs = 0;
   let sleptMs = 0;
@@ -35,6 +36,7 @@ function loadSources(site, {
     return budget === null ? null : Math.max(0, budget - sleptMs);
   };
   const mv = {
+    log: Object.fromEntries(['info', 'warn', 'error'].map(level => [level, message => logs.push({ level, message })])),
     config,
     storage: {
       get: (key) => store.has(key) ? jsonCopy(store.get(key)) : null,
@@ -69,16 +71,17 @@ function loadSources(site, {
   const context = createContext({ mv, console: undefined, clock });
   runInContext('Date.now = ((readTime) => () => readTime())(clock); delete globalThis.clock;', context);
   runInContext(`${runtime}\n;\n${site}`, context, { filename: 'muvyo-entry.js' });
-  const { MP, search, resolve } = runInContext(`({
+  const { MP, search, resolve, resolveLink } = runInContext(`({
     MP: typeof MP === 'undefined' ? undefined : MP,
     search: typeof search === 'function' ? search : undefined,
     resolve: typeof resolve === 'function' ? resolve : undefined,
+    resolveLink: typeof resolveLink === 'function' ? resolveLink : undefined,
   })`, context);
   const invoke = entry => entry && (args => {
     sleptMs = 0;
     return entry(args);
   });
-  return { MP, search: invoke(search), resolve: invoke(resolve), calls, store };
+  return { MP, search: invoke(search), resolve: invoke(resolve), resolveLink: invoke(resolveLink), calls, logs, store };
 }
 
 function jsonCopy(value) {

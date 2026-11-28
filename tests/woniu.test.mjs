@@ -62,7 +62,8 @@ function site(handler, options = {}) {
 
 const paths = plugin => plugin.calls.map(({ url }) => url.slice(origin.length));
 
-test('Woniu reads real resource containers and lazily resolves both validated link types', () => {
+for (const entry of ['resolve', 'resolveLink']) {
+test(`${entry}: Woniu reads real resource containers and lazily resolves both validated link types`, () => {
   const valid = group(
     row('磁力 A', '', `<a class="pan-link-btn" href="${magnet}&amp;dn=fixture">打开</a>`),
     row('磁力 B', '', '<button data-copy="magnet:?xt=urn:btih:abcdefghijklmnopqrstuvwxyz234567">复制</button>'),
@@ -86,15 +87,17 @@ test('Woniu reads real resource containers and lazily resolves both validated li
   assert.doesNotMatch(JSON.stringify(plugin.MP.untoken(items[1].resolve_token)), /fixture|9abc|fake-session/);
   assert.deepEqual(paths(plugin), [loginPath, searchPath, detail(18260)]);
 
-  const shareResult = plugin.resolve({ token: items[1].resolve_token });
+  const shareResult = plugin[entry]({ token: items[1].resolve_token });
   assert.equal(shareResult.share_link, share);
   assert.equal(shareResult.share_code, '9abc');
-  assert.equal(plugin.resolve({ token: items[0].resolve_token }).magnets[0], magnet + '&dn=fixture');
+  assert.equal(plugin[entry]({ token: items[0].resolve_token }).magnets[0], magnet + '&dn=fixture');
   assert.deepEqual(paths(plugin), [loginPath, searchPath, detail(18260), detail(18260), detail(18260)]);
 
   const textOnly = plugin.search({ ...query, link_types: ['115'] }).items.find(item => item.title === '文本提取码');
-  assert.equal(plugin.resolve({ token: textOnly.resolve_token }).share_code, 'z321');
+  assert.equal(plugin[entry]({ token: textOnly.resolve_token }).share_code, 'z321');
 });
+}
+
 
 test('Woniu preserves empty search results and never follows a non-source detail or page link', () => {
   const plugin = site(path => path === searchPath ? ok(page([], 'https://other.invalid/search/')) : undefined);
@@ -358,4 +361,30 @@ test('Woniu paces the actual search retry after a 401 without delaying login', (
   }, { now: 100000 });
   assert.equal(plugin.search(query).items.length, 0);
   assert.deepEqual(attempts, [[loginPath, 100000], [searchPath, 100000], [loginPath, 100000], [searchPath, 103000]]);
+});
+
+// Transport diagnostics must explain failures without exposing a host error's private data.
+test('Woniu reports the failed stage and a fixed transport category without leaking host messages', () => {
+  for (const [message, category] of [
+    ['proxy CONNECT failed: fixture-private-cookie', '代理'],
+    ['SSL certificate verify failed: fixture-private-cookie', 'TLS'],
+    ['DNS resolution failed: fixture-private-cookie', 'DNS'],
+    ['request timed out: fixture-private-cookie', '超时'],
+    ['fixture-private-cookie', '网络请求失败'],
+  ]) {
+    for (const failurePath of [loginPath, searchPath, detail(7128)]) {
+      const plugin = site(path => {
+        if (path === failurePath) throw new Error(message);
+        if (path === searchPath) return ok(page([7128]));
+      });
+      const stage = failurePath === loginPath ? '登录' : failurePath === searchPath ? '搜索' : '详情';
+      assert.throws(() => plugin.search(query), error =>
+        error.kind === 'source' && error.message.includes(stage) && error.message.includes(category) &&
+        !error.message.includes('fixture-private'));
+      assert.equal(plugin.logs.length, 1);
+      assert.ok(plugin.logs[0].message.includes(stage));
+      assert.ok(plugin.logs[0].message.includes(category));
+      assert.doesNotMatch(JSON.stringify(plugin.logs), /fixture-private|Cookie|https:\/\//);
+    }
+  }
 });

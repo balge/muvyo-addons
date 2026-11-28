@@ -468,3 +468,10 @@ test('build compiles standalone entries and copies only their manifest and readm
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+// Diagnostics must never replace the client's fixed public error with private host text.
+test('transport diagnostic hooks cannot expose raw errors even if the hook fails', () => {
+  const host = loadRuntime({ fetch() { throw new Error('private-upstream-cookie'); } });
+  const client = makeClient(host, { onFetchError() { throw new Error('private-hook-value'); } });
+  assert.throws(() => client.raw('/results'), { message: 'Site request failed' });
+});

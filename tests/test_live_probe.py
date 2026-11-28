@@ -16,6 +16,18 @@ URL = "https://www.jying.top/api/csrf/"
 
 
 class LiveProbeTests(unittest.TestCase):
+    def test_built_plugins_export_both_resolve_names_in_native_quickjs(self):
+        root = Path(__file__).resolve().parents[1]
+        for plugin_id in ("balge.miniyingshi", "balge.jying", "balge.woniu"):
+            entry = (root / "dist" / plugin_id / "main.js").read_text()
+            for name in ("resolve", "resolveLink"):
+                with self.subTest(plugin=plugin_id, entry=name):
+                    result, stats = probe.run_entry(entry, plugin_id, {}, {}, name, {"token": "invalid"},
+                                                    time.monotonic() + 2)
+                    self.assertIsNotNone(result)
+                    self.assertEqual(result["error"]["kind"], "rejected")
+                    self.assertEqual(stats["requests"], 0)
+
     def test_quickjs_has_sync_fetch_and_private_cross_call_storage(self):
         entry = '''
           let firstCall = true;
