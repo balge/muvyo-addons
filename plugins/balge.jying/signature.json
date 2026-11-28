@@ -19,12 +19,12 @@
  },
  "payload": {
   "plugin_id": "balge.jying",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "files": {
-   "README.md": "3064dcd5f79fc8b57b3aa78278906fb851d64707163da85c10b54089fba79ab4",
-   "encrypted.json": "5cbf44e098b14fcf36e492c41257d48e99899c73a744cf38d990e1046724fd67",
-   "manifest.json": "239e98f5d9e14b4cfa35ebabb5fa1e93cb045ccd78fd787b92bf2d603969ded3"
+   "README.md": "ea7a23650d479e6dd7f3a8c79071c2042649cfeab0c10cccc0d820c29a96ad5a",
+   "encrypted.json": "8b855d76e9dd90cbf1ce59bca5eb9e881f435659bad0c712506055e31ec708b7",
+   "manifest.json": "4e28767d0f13104362b5d6b8ceb42d8cfa872bfcf372bd7315ee6e9cea50cc61"
   }
  },
- "signature": "AfV5gQXiU75p8Ji9tHqCcJhR0SiqI+O7DpJ4pLAridfTS9gy81m4XN7q0hdNS17zsUDAmwmcEk5p+Q1g08AqDA=="
+ "signature": "VGZJwMjaohZR1nAJ2D1cWAiPibHzh1HFu5JFc1mRZHynERPtnz5jQr4gDPKwEq8636FXrit1A+SejrT0tcwRCg=="
 }

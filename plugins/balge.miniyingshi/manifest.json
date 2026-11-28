@@ -2,7 +2,7 @@
   "api": 1,
   "id": "balge.miniyingshi",
   "name": "迷你影视",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "balge",
   "description": "搜索迷你影视的 115 分享与磁力链接。",
   "min_mv_version": "3.14.0",

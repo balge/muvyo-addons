@@ -19,12 +19,12 @@
  },
  "payload": {
   "plugin_id": "balge.woniu",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "files": {
-   "README.md": "6e2fafc752756c2e81cd8c230739e2997f88782dfdab681bebae592ae14e84f4",
-   "encrypted.json": "0533fe01e9f0813853e5ce6cf3b19ef192dee8d7a9e81a44e016e7cefb1c5ba0",
-   "manifest.json": "b428739514a02ab6abbad1814136bf69226d4b8523a8ed70b7c23a6998d59668"
+   "README.md": "e051d3f93bd7424cd884f385c2c046857777d2d08db8274eeaa2268b28b176d7",
+   "encrypted.json": "4aa80cc085f13d07f19ce0733d1e972b2824370cb8b05083cfbdf85d7ac92aed",
+   "manifest.json": "85aabefaf2e2fc86d57eabf009778d4d12232d1425ffe335c9ebb7f88bc7d67f"
   }
  },
- "signature": "sXSYidDLgjMduGCFo6QrspHE0p/hPjsi0aMZTDqBT9CGP5HHMlUY9/LZkA0b1smgYlaBb1nTO7ITosw06d49Aw=="
+ "signature": "OOuw48w75jIMguw80GsUjMtEo8MJRR0HYNm/O6QtF0Gx/JBm4TOhKzf1jBWIJRnLoh254kYK4RTgrYSz8FDYDA=="
 }

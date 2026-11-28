@@ -19,12 +19,12 @@
  },
  "payload": {
   "plugin_id": "balge.miniyingshi",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "files": {
-   "README.md": "be38386a5e9b5a424a9c9cdd993686d989f1e4c53fe6bdf82b5a26b9aa5733d3",
-   "encrypted.json": "a8526936de4ce1ca5dc2f1bb8e301dbad771c17d218e6c869e4053c152a2f4a2",
-   "manifest.json": "f249082cbb6899d0ab8079485c270bcdad13d55255f7b041cb9937a16fface26"
+   "README.md": "4f337ed38f38d0d97916f9b71ca97cc8383201b1a06fe10a785d1375225926cd",
+   "encrypted.json": "e36b3ce42c9e7993b29ecade6cd4b3018c0a64bad9344d277f674673427d4a6b",
+   "manifest.json": "c7986a358846d0aa96a95d5c305a7ffcc16b2e066f5a8e2b58b35b7e267d8705"
   }
  },
- "signature": "VQGic0JvogPyIwfn1uhq4TjHT6o1DaV8+oTNQozFmYIiZhlPaAJiEfopDTI5bgBlhNTqZPlSWNJDN4dgzpW6CA=="
+ "signature": "5lZxuijk2LuP/P6iwfNc9uFc5FMx9MyWaEBs/MXBUXiH9QD3zG6b3qC2uiKwfaHT5SgBehX+SFOEu3Jaq9KxDw=="
 }
