@@ -403,3 +403,23 @@ test('Woniu applies its module connection mode to login, search, details and v4 
       [detail(7128), expectedProxy], [detail(7128), expectedProxy]]);
   }
 });
+
+test('Woniu allows a slow search within the host limit and clamps a shorter remaining deadline', () => {
+  const timeouts = [];
+  const plugin = site((path, input) => {
+    timeouts.push(input.timeout);
+    if (path === searchPath) {
+      if (input.timeout < 12) throw new Error('request timed out');
+      return ok(page([7128]));
+    }
+    if (path === detail(7128)) return ok(group(row('115', copyURL)));
+  }, { remainingMs: 60000 });
+  assert.equal(plugin.search({ ...query, limit: 1 }).items.length, 1);
+  assert.ok(timeouts.every(value => value >= 12 && value <= 20));
+
+  const short = site((path, input) => {
+    assert.ok(input.timeout <= 4);
+    if (path === searchPath) return ok(page([]));
+  }, { remainingMs: 4500 });
+  assert.equal(short.search(query).items.length, 0);
+});
